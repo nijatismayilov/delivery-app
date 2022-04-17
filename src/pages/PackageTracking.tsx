@@ -12,7 +12,7 @@ import {
 } from "firebase/firestore";
 import { useCallback, useMemo, useState } from "react";
 import { DataGrid, GridColDef, GridSelectionModel, GridValueGetterParams } from "@mui/x-data-grid";
-import { Parcel, decodeParcelPaths, encodeParcelPaths } from "./RouteOptimization";
+import { Parcel, decodeParcelPaths, getPathsFromDirectionResult } from "./RouteOptimization";
 import { HiCheck } from "react-icons/hi";
 import { Box, Button, Chip, CircularProgress, Typography } from "@mui/material";
 import { BsDash } from "react-icons/bs";
@@ -120,6 +120,10 @@ const convertDocToParcel = (doc: QueryDocumentSnapshot<DocumentData>): Parcel =>
 const PackageTracking: React.FC = () => {
 	const [inventoryParcelsSelectionModel, setInventoryParcelsSelectionModel] =
 		useState<GridSelectionModel>([]);
+	const [inDeliveryParcelsSelectionModel, setInDeliveryParcelsSelectionModel] =
+		useState<GridSelectionModel>([]);
+	const [deliveredParcelsSelectionModel, setDeliveredParcelsSelectionModel] =
+		useState<GridSelectionModel>([]);
 	const [sendToDeliveryLoading, setSendToDeliveryLoading] = useState(false);
 	const [parcelsSnapshot, loading] = useCollection(parcelsCollectionRef);
 	const [vehiclesSnapshot, vehiclesLoading] = useCollection(vehiclesCollectionRef);
@@ -160,12 +164,16 @@ const PackageTracking: React.FC = () => {
 	);
 
 	const handleInDeliveryParcelsSelectionModelChange = useCallback(
-		(selectionModel: GridSelectionModel) => {},
+		(selectionModel: GridSelectionModel) => {
+			setInDeliveryParcelsSelectionModel(selectionModel);
+		},
 		[]
 	);
 
 	const handleDeliveredParcelsSelectionModelChange = useCallback(
-		(selectionModel: GridSelectionModel) => {},
+		(selectionModel: GridSelectionModel) => {
+			setDeliveredParcelsSelectionModel(selectionModel);
+		},
 		[]
 	);
 
@@ -178,53 +186,115 @@ const PackageTracking: React.FC = () => {
 		try {
 			setSendToDeliveryLoading(true);
 
-			const paths = inventoryParcelsSelectionModel.reduce((prev, selection) => {
-				const parcelPaths = inventoryRows.find((row) => row.id === (selection as string))?.paths;
+			let waypoints: google.maps.DirectionsWaypoint[] | undefined = undefined;
+			let origin: string = "";
+			let destination: string = "";
 
-				if (!parcelPaths) return prev;
+			if (inventoryParcelsSelectionModel.length !== 1) {
+				const waypointsTuples = inventoryParcelsSelectionModel.map((selection, index) => {
+					const parcel = inventoryRows.find((row) => row.id === (selection as string));
 
-				return { ...prev, [selection as string]: encodeParcelPaths(parcelPaths) };
-			}, {} as { [parcelId: string]: string[] });
+					if (!parcel) return [];
 
-			if (idleVehicles.length === 0) {
-				const vehicle: VehicleDto = {
-					parcels: inventoryParcelsSelectionModel as string[],
-					paths,
-					status: "delivery",
-					deliveryProgress: 0,
-				};
+					if (index === 0) {
+						origin = parcel.origin;
+						return [{ location: parcel.destination, stopover: true }];
+					}
 
-				const vehicleRef = await addDoc(vehiclesCollectionRef, vehicle);
+					if (index === inventoryParcelsSelectionModel.length - 1) {
+						destination = parcel.destination;
+						return [{ location: parcel.origin, stopover: true }];
+					}
 
-				toast.success(`Parcels added to new vehicle ${vehicleRef.id} successfully`, {
-					duration: 5000,
+					return [
+						{ location: parcel.origin, stopover: true },
+						{ location: parcel.destination, stopover: true },
+					];
 				});
+
+				waypoints = waypointsTuples.reduce((prev, waypointsTuple) => {
+					return [...prev, ...waypointsTuple];
+				}, [] as google.maps.DirectionsWaypoint[]);
 			} else {
-				const vehicle = idleVehicles[0];
-				const vehicleRef = doc(db, "vehicles", vehicle.id) as DocumentReference<Vehicle>;
+				const parcel = inventoryRows.find(
+					(row) => row.id === (inventoryParcelsSelectionModel[0] as string)
+				);
 
-				console.log(vehicleRef.id);
+				if (!parcel) return;
 
-				await updateDoc<Vehicle>(vehicleRef, {
-					paths,
-					parcels: inventoryParcelsSelectionModel as string[],
-					status: "delivery",
-					deliveryProgress: 0,
-				});
-
-				toast.success(`Parcels added to vehicle ${vehicleRef.id} successfully`, { duration: 5000 });
+				origin = parcel.origin;
+				destination = parcel.destination;
 			}
 
-			await changeParcelsStatus(inventoryParcelsSelectionModel, "In Delivery");
+			const DirectionsService = new google.maps.DirectionsService();
 
-			setInventoryParcelsSelectionModel([]);
+			const result = await DirectionsService.route({
+				origin,
+				destination,
+				travelMode: "DRIVING" as google.maps.TravelMode.DRIVING,
+				waypoints,
+			});
 
-			toast.success("Parcels moved to 'In Delivery'", { duration: 5000 });
+			if (result) {
+				const paths = getPathsFromDirectionResult(result);
+
+				if (!paths) {
+					toast.error("Error encoding optimal route for vehicle");
+					return;
+				}
+
+				console.log(paths);
+
+				if (idleVehicles.length === 0) {
+					const vehicle: VehicleDto = {
+						parcels: inventoryParcelsSelectionModel as string[],
+						paths,
+						status: "delivery",
+						deliveryProgress: 0,
+					};
+
+					const vehicleRef = await addDoc(vehiclesCollectionRef, vehicle);
+
+					toast.success(`Parcels added to new vehicle ${vehicleRef.id} successfully`, {
+						duration: 5000,
+					});
+				} else {
+					const vehicle = idleVehicles[0];
+					const vehicleRef = doc(db, "vehicles", vehicle.id) as DocumentReference<Vehicle>;
+
+					await updateDoc<Vehicle>(vehicleRef, {
+						paths,
+						parcels: inventoryParcelsSelectionModel as string[],
+						status: "delivery",
+						deliveryProgress: 0,
+					});
+
+					toast.success(`Parcels added to vehicle ${vehicleRef.id} successfully`, {
+						duration: 5000,
+					});
+				}
+
+				await changeParcelsStatus(inventoryParcelsSelectionModel, "In Delivery");
+
+				setInventoryParcelsSelectionModel([]);
+
+				toast.success("Parcels moved to 'In Delivery'", { duration: 5000 });
+			} else {
+				toast.error(`Error generating optimal route for vehicle`);
+			}
 		} catch (_error) {
 			toast.error("Error moving parcels to 'In Delivery'", { duration: 5000 });
 		} finally {
 			setSendToDeliveryLoading(false);
 		}
+	};
+
+	const handleMarkDelivered = async () => {
+		await changeParcelsStatus(inDeliveryParcelsSelectionModel, "Delivered");
+	};
+
+	const handleSendToInventory = async () => {
+		await changeParcelsStatus(deliveredParcelsSelectionModel, "Inventory");
 	};
 
 	return (
@@ -258,13 +328,20 @@ const PackageTracking: React.FC = () => {
 			</Box>
 
 			<Box sx={{ marginBottom: 5 }}>
-				<Typography
-					variant='h6'
-					sx={{ marginBottom: 1 }}
-					color={(theme) => theme.palette.primary.dark}
-				>
-					In Delivery Parcels
-				</Typography>
+				<Box sx={{ display: "flex", marginBottom: 1, justifyContent: "space-between" }}>
+					<Typography variant='h6' color={(theme) => theme.palette.primary.dark}>
+						In Delivery Parcels
+					</Typography>
+
+					<Button
+						// disabled={inventoryParcelsSelectionModel.length === 0 || sendToDeliveryLoading}
+						variant='contained'
+						onClick={handleMarkDelivered}
+					>
+						{sendToDeliveryLoading ? <CircularProgress size={25} /> : "Send to delivery"}
+					</Button>
+				</Box>
+
 				<Box sx={{ height: "400px" }}>
 					<DataGrid
 						rows={inDeliveryRows}
@@ -279,13 +356,20 @@ const PackageTracking: React.FC = () => {
 			</Box>
 
 			<Box sx={{ marginBottom: 5 }}>
-				<Typography
-					variant='h6'
-					sx={{ marginBottom: 1 }}
-					color={(theme) => theme.palette.primary.dark}
-				>
-					Delivered Parcels
-				</Typography>
+				<Box sx={{ display: "flex", marginBottom: 1, justifyContent: "space-between" }}>
+					<Typography variant='h6' color={(theme) => theme.palette.primary.dark}>
+						Delivered Parcels
+					</Typography>
+
+					<Button
+						// disabled={inventoryParcelsSelectionModel.length === 0 || sendToDeliveryLoading}
+						variant='contained'
+						onClick={handleSendToInventory}
+					>
+						{sendToDeliveryLoading ? <CircularProgress size={25} /> : "Send to delivery"}
+					</Button>
+				</Box>
+
 				<Box sx={{ height: "400px" }}>
 					<DataGrid
 						rows={deliveredRows}

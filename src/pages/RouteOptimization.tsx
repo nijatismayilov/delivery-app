@@ -28,52 +28,29 @@ const MemoizedDirectionsService = memo(DirectionsService);
 
 const parcelsCollectionRef = collection(db, "parcels");
 
-// const addVehiclePathToFirebase = async (result: google.maps.DirectionsResult) => {
-// 	const { routes } = result;
-
-// 	if (!routes[0]) return;
-
-// 	const { legs } = routes[0];
-// 	const leg = legs[0];
-
-// 	if (!leg) return;
-
-// 	const { steps } = leg;
-
-// 	const paths = steps.reduce((prevValue, step) => {
-// 		// @ts-ignore
-// 		const decodedPath = decode(step!.polyline.points, 5);
-// 		const path = decodedPath.map((coords) => new google.maps.LatLng(coords[0], coords[1]));
-
-// 		return [...prevValue, ...path];
-// 	}, [] as google.maps.LatLng[]);
-
-// 	const pathsEncoded = paths.map((path) => [path.lat(), path.lng()].join("-"));
-
-// 	try {
-// 		const ref = await addDoc(vehiclesCollectionRef, { paths: pathsEncoded });
-// 		toast.success(`Vehicle Path Added - ${ref.id}`);
-// 	} catch (_error) {}
-// };
-
-const getPathsFromDirectionResult = (result: google.maps.DirectionsResult) => {
+export const getPathsFromDirectionResult = (result: google.maps.DirectionsResult) => {
 	const { routes } = result;
 
 	if (!routes[0]) return;
 
 	const { legs } = routes[0];
-	const leg = legs[0];
 
-	if (!leg) return;
+	const coordsTuples = legs.map((leg) => {
+		const { steps } = leg;
 
-	const { steps } = leg;
+		const paths = steps.reduce((prevValue, step) => {
+			// @ts-ignore
+			const decodedPath = decode(step!.polyline.points, 5);
+			const path = decodedPath.map((coords) => new google.maps.LatLng(coords[0], coords[1]));
 
-	const paths = steps.reduce((prevValue, step) => {
-		// @ts-ignore
-		const decodedPath = decode(step!.polyline.points, 5);
-		const path = decodedPath.map((coords) => new google.maps.LatLng(coords[0], coords[1]));
+			return [...prevValue, ...path];
+		}, [] as google.maps.LatLng[]);
 
-		return [...prevValue, ...path];
+		return paths;
+	});
+
+	const paths = coordsTuples.reduce((prevValue, coords) => {
+		return [...prevValue, ...coords];
 	}, [] as google.maps.LatLng[]);
 
 	const pathsEncoded = paths.map((path) => [path.lat(), path.lng()].join("-"));

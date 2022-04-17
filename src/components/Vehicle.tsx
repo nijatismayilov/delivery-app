@@ -1,6 +1,6 @@
 import { Polyline } from "@react-google-maps/api";
 import { Vehicle } from "pages/VehicleTracking";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { db } from "firebase-config";
 import { updateDoc, doc, getDoc, DocumentReference } from "firebase/firestore";
 import { Parcel } from "pages/RouteOptimization";
@@ -20,7 +20,7 @@ const updateVehicleProgress = async (id: string, progress: number) => {
 };
 
 const setVehicleIdle = async (id: string) => {
-	const vehicleRef = doc(db, "vehicles", id);
+	const vehicleRef = doc(db, "vehicles", id) as DocumentReference<Vehicle>;
 	const vehicleSnapshot = await getDoc(vehicleRef);
 	const vehicle = vehicleSnapshot.data() as Vehicle | undefined;
 
@@ -34,7 +34,12 @@ const setVehicleIdle = async (id: string) => {
 		);
 	}
 
-	await updateDoc(vehicleRef, { status: "idle", deliveryProgress: 0, parcels: [], paths: {} });
+	await updateDoc<Vehicle>(vehicleRef, {
+		status: "idle",
+		deliveryProgress: 0,
+		parcels: [],
+		paths: [],
+	});
 };
 
 interface Props {
@@ -46,12 +51,6 @@ interface Props {
 const VehicleComponent: React.FC<Props> = (props) => {
 	const { vehicle, id, simulationSpeed } = props;
 	const [progress, setProgress] = useState(vehicle.deliveryProgress * 100);
-
-	const path = useMemo(() => {
-		return vehicle.parcels.reduce((prev, parcel) => {
-			return [...prev, ...vehicle.paths[parcel]];
-		}, [] as google.maps.LatLng[]);
-	}, [vehicle]);
 
 	useEffect(() => {
 		let interval = setInterval(async () => {
@@ -83,7 +82,7 @@ const VehicleComponent: React.FC<Props> = (props) => {
 	return (
 		<>
 			<Polyline
-				path={path}
+				path={vehicle.paths}
 				options={{
 					icons: [
 						{

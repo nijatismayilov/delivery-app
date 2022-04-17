@@ -1,7 +1,6 @@
 import Layout from "components/Layout";
 import { GoogleMap } from "@react-google-maps/api";
 import { useState, useMemo } from "react";
-// import { decode } from "@googlemaps/polyline-codec";
 import { db } from "firebase-config";
 import { useCollection } from "react-firebase-hooks/firestore";
 import { collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
@@ -16,11 +15,11 @@ export type Vehicle = {
 	parcels: string[];
 	status: VehicleStatus;
 	deliveryProgress: number;
-	paths: { [parcelId: string]: google.maps.LatLng[] };
+	paths: google.maps.LatLng[];
 };
 
 export type VehicleDto = Omit<Vehicle, "id" | "paths"> & {
-	paths: { [parcelId: string]: string[] };
+	paths: string[];
 };
 
 const containerStyle = {
@@ -36,9 +35,7 @@ const center = {
 const vehiclesCollectionRef = collection(db, "vehicles");
 
 const convertDocToVehicle = (doc: QueryDocumentSnapshot<DocumentData>): Vehicle => {
-	const paths = Object.entries(doc.data()!.paths).reduce((prev, [parcelId, parcelPath]) => {
-		return { ...prev, [parcelId]: decodeParcelPaths(parcelPath as string[]) };
-	}, {} as { [parcelId: string]: google.maps.LatLng[] });
+	const paths = decodeParcelPaths(doc.data()!.paths as string[]);
 
 	return {
 		id: doc.id,
