@@ -26,7 +26,6 @@ const center = {
 
 const MemoizedDirectionsService = memo(DirectionsService);
 
-// const vehiclesCollectionRef = collection(db, "vehicles");
 const parcelsCollectionRef = collection(db, "parcels");
 
 // const addVehiclePathToFirebase = async (result: google.maps.DirectionsResult) => {
@@ -80,6 +79,18 @@ const getPathsFromDirectionResult = (result: google.maps.DirectionsResult) => {
 	const pathsEncoded = paths.map((path) => [path.lat(), path.lng()].join("-"));
 
 	return pathsEncoded;
+};
+
+export const decodeParcelPaths = (paths: string[]): google.maps.LatLng[] => {
+	return paths.map((path) => {
+		const [lat, lng] = path.split("-");
+
+		return new google.maps.LatLng(+lat, +lng);
+	});
+};
+
+export const encodeParcelPaths = (paths: google.maps.LatLng[]): string[] => {
+	return paths.map((path) => [path.lat(), path.lng()].join("-"));
 };
 
 export type Parcel = {

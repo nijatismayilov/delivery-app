@@ -6,6 +6,20 @@ import { db } from "firebase-config";
 import { useCollection } from "react-firebase-hooks/firestore";
 import { collection } from "firebase/firestore";
 
+export type VehicleStatus = "idle" | "delivery";
+
+export type Vehicle = {
+	id: string;
+	parcels: string[];
+	status: VehicleStatus;
+	deliveryProgress: number;
+	paths: { [parcelId: string]: google.maps.LatLng[] };
+};
+
+export type VehicleDto = Omit<Vehicle, "id" | "paths"> & {
+	paths: { [parcelId: string]: string[] };
+};
+
 const containerStyle = {
 	width: "100%",
 	height: "calc(100vh * 0.8)",

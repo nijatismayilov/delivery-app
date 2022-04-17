@@ -1,16 +1,26 @@
 import Layout from "components/Layout";
 import { useCollection } from "react-firebase-hooks/firestore";
 import { db } from "firebase-config";
-import { collection, updateDoc, doc, DocumentReference } from "firebase/firestore";
+import {
+	collection,
+	updateDoc,
+	doc,
+	DocumentReference,
+	addDoc,
+	QueryDocumentSnapshot,
+	DocumentData,
+} from "firebase/firestore";
 import { useCallback, useMemo, useState } from "react";
 import { DataGrid, GridColDef, GridSelectionModel, GridValueGetterParams } from "@mui/x-data-grid";
-import { Parcel } from "./RouteOptimization";
+import { Parcel, decodeParcelPaths, encodeParcelPaths } from "./RouteOptimization";
 import { HiCheck } from "react-icons/hi";
-import { Box, Button, Chip, Typography } from "@mui/material";
+import { Box, Button, Chip, CircularProgress, Typography } from "@mui/material";
 import { BsDash } from "react-icons/bs";
 import toast from "react-hot-toast";
+import { Vehicle, VehicleDto } from "./VehicleTracking";
 
-const vehiclesCollectionRef = collection(db, "parcels");
+const parcelsCollectionRef = collection(db, "parcels");
+const vehiclesCollectionRef = collection(db, "vehicles");
 
 type ParcelStatusColor =
 	| "default"
@@ -99,18 +109,26 @@ const changeParcelsStatus = async (selectionModel: GridSelectionModel, status: P
 	});
 };
 
+const convertDocToParcel = (doc: QueryDocumentSnapshot<DocumentData>): Parcel => {
+	return {
+		id: doc.id,
+		...doc.data(),
+		paths: decodeParcelPaths(doc.data().paths),
+	} as Parcel;
+};
+
 const PackageTracking: React.FC = () => {
-	const [inDeliveryParcelsSelectionModel, setInDeliveryParcelsSelectionModel] =
+	const [inventoryParcelsSelectionModel, setInventoryParcelsSelectionModel] =
 		useState<GridSelectionModel>([]);
-	const [snapshot, loading] = useCollection(vehiclesCollectionRef, {
-		snapshotListenOptions: { includeMetadataChanges: false },
-	});
+	const [sendToDeliveryLoading, setSendToDeliveryLoading] = useState(false);
+	const [parcelsSnapshot, loading] = useCollection(parcelsCollectionRef);
+	const [vehiclesSnapshot, vehiclesLoading] = useCollection(vehiclesCollectionRef);
 
 	const rows = useMemo(() => {
-		const docs = snapshot?.docs || [];
+		const docs = parcelsSnapshot?.docs || [];
 
-		return docs.map((doc) => ({ ...doc.data(), id: doc.id })) as Parcel[];
-	}, [snapshot]);
+		return docs.map((doc) => convertDocToParcel(doc));
+	}, [parcelsSnapshot]);
 
 	const inventoryRows = useMemo(() => {
 		return rows.filter((row) => row.status === "Inventory");
@@ -124,9 +142,19 @@ const PackageTracking: React.FC = () => {
 		return rows.filter((row) => row.status === "Delivered");
 	}, [rows]);
 
+	const vehicles = useMemo(() => {
+		const docs = vehiclesSnapshot?.docs || [];
+
+		return docs.map((doc) => ({ ...doc.data(), id: doc.id })) as Vehicle[];
+	}, [vehiclesSnapshot]);
+
+	const idleVehicles = useMemo(() => {
+		return vehicles.filter((vehicle) => vehicle.status === "idle");
+	}, [vehicles]);
+
 	const handleInventoryParcelsSelectionModelChange = useCallback(
 		async (selectionModel: GridSelectionModel) => {
-			setInDeliveryParcelsSelectionModel(selectionModel);
+			setInventoryParcelsSelectionModel(selectionModel);
 		},
 		[]
 	);
@@ -142,14 +170,58 @@ const PackageTracking: React.FC = () => {
 	);
 
 	const handleSendToDelivery = async () => {
-		try {
-			await changeParcelsStatus(inDeliveryParcelsSelectionModel, "In Delivery");
+		if (vehiclesLoading) {
+			toast("Please wait while we load vehicles...");
+			return;
+		}
 
-			setInDeliveryParcelsSelectionModel([]);
+		try {
+			setSendToDeliveryLoading(true);
+
+			const paths = inventoryParcelsSelectionModel.reduce((prev, selection) => {
+				const parcelPaths = inventoryRows.find((row) => row.id === (selection as string))?.paths;
+
+				if (!parcelPaths) return prev;
+
+				return { ...prev, [selection as string]: encodeParcelPaths(parcelPaths) };
+			}, {} as { [parcelId: string]: string[] });
+
+			if (idleVehicles.length === 0) {
+				const vehicle: VehicleDto = {
+					parcels: inventoryParcelsSelectionModel as string[],
+					paths,
+					status: "delivery",
+					deliveryProgress: 0,
+				};
+
+				const vehicleRef = await addDoc(vehiclesCollectionRef, vehicle);
+
+				toast.success(`Parcels added to new vehicle ${vehicleRef.id} successfully`, {
+					duration: 5000,
+				});
+			} else {
+				const vehicle = idleVehicles[0];
+				const vehicleRef = doc(db, "parcels", vehicle.id) as DocumentReference<Vehicle>;
+
+				await updateDoc<Vehicle>(vehicleRef, {
+					paths,
+					parcels: inventoryParcelsSelectionModel as string[],
+					status: "delivery",
+					deliveryProgress: 0,
+				});
+
+				toast.success(`Parcels added to vehicle ${vehicleRef.id} successfully`, { duration: 5000 });
+			}
+
+			await changeParcelsStatus(inventoryParcelsSelectionModel, "In Delivery");
+
+			setInventoryParcelsSelectionModel([]);
 
 			toast.success("Parcels moved to 'In Delivery'", { duration: 5000 });
 		} catch (_error) {
 			toast.error("Error moving parcels to 'In Delivery'", { duration: 5000 });
+		} finally {
+			setSendToDeliveryLoading(false);
 		}
 	};
 
@@ -162,11 +234,11 @@ const PackageTracking: React.FC = () => {
 					</Typography>
 
 					<Button
-						disabled={inDeliveryParcelsSelectionModel.length === 0}
-						onClick={handleSendToDelivery}
+						disabled={inventoryParcelsSelectionModel.length === 0 || sendToDeliveryLoading}
 						variant='contained'
+						onClick={handleSendToDelivery}
 					>
-						Send to delivery
+						{sendToDeliveryLoading ? <CircularProgress size={25} /> : "Send to delivery"}
 					</Button>
 				</Box>
 
