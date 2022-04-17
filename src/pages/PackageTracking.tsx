@@ -201,7 +201,9 @@ const PackageTracking: React.FC = () => {
 				});
 			} else {
 				const vehicle = idleVehicles[0];
-				const vehicleRef = doc(db, "parcels", vehicle.id) as DocumentReference<Vehicle>;
+				const vehicleRef = doc(db, "vehicles", vehicle.id) as DocumentReference<Vehicle>;
+
+				console.log(vehicleRef.id);
 
 				await updateDoc<Vehicle>(vehicleRef, {
 					paths,

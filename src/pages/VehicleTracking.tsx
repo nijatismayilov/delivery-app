@@ -1,10 +1,13 @@
 import Layout from "components/Layout";
-import { GoogleMap, Polyline } from "@react-google-maps/api";
-import { useState, useEffect, useMemo } from "react";
+import { GoogleMap } from "@react-google-maps/api";
+import { useState, useMemo } from "react";
 // import { decode } from "@googlemaps/polyline-codec";
 import { db } from "firebase-config";
 import { useCollection } from "react-firebase-hooks/firestore";
-import { collection } from "firebase/firestore";
+import { collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
+import { decodeParcelPaths } from "./RouteOptimization";
+import VehicleComponent from "components/Vehicle";
+import { ToggleButtonGroup, ToggleButton, Box } from "@mui/material";
 
 export type VehicleStatus = "idle" | "delivery";
 
@@ -30,96 +33,74 @@ const center = {
 	lng: 49.8671,
 };
 
-const icon = {
-	path: 1,
-	scale: 6,
-	strokeColor: "#ff0000",
-	fillColor: "#ff0000",
-	rotation: 0,
-};
-
 const vehiclesCollectionRef = collection(db, "vehicles");
 
+const convertDocToVehicle = (doc: QueryDocumentSnapshot<DocumentData>): Vehicle => {
+	const paths = Object.entries(doc.data()!.paths).reduce((prev, [parcelId, parcelPath]) => {
+		return { ...prev, [parcelId]: decodeParcelPaths(parcelPath as string[]) };
+	}, {} as { [parcelId: string]: google.maps.LatLng[] });
+
+	return {
+		id: doc.id,
+		...doc.data(),
+		paths,
+	} as Vehicle;
+};
+
+const simulationSpeeds = [
+	{ label: "Real Time", value: 1 },
+	{ label: "5x", value: 5 },
+	{ label: "10x", value: 10 },
+];
+
 const VehicleTracking: React.FC = () => {
-	const [snapshot] = useCollection(vehiclesCollectionRef, {
-		snapshotListenOptions: { includeMetadataChanges: false },
-	});
-	const docs = useMemo(() => snapshot?.docs || [], [snapshot]);
-	const [pathMap, setPathMap] = useState<{
-		[id: string]:
-			| google.maps.MVCArray<google.maps.LatLng>
-			| google.maps.LatLng[]
-			| google.maps.LatLngLiteral[];
-	}>({});
-	const [iconOffset, setIconsOffset] = useState(0);
+	const [simulationSpeed, setSimulationSpeed] = useState(simulationSpeeds[0].value);
+	const [snapshot] = useCollection(vehiclesCollectionRef);
 
-	useEffect(() => {
-		if (docs.length === 0) return;
+	const vehicles = useMemo(() => {
+		const docs = snapshot?.docs || [];
 
-		const newPathMap = docs.reduce(
-			(prevValue, doc) => {
-				const data = doc.data();
-				const id = doc.id;
+		return docs.map(convertDocToVehicle).filter((v) => v.status === "delivery");
+	}, [snapshot]);
 
-				const paths = data.paths.map((path: string) => {
-					const [lat, lng] = path.split("-");
-
-					return new google.maps.LatLng(+lat, +lng);
-				});
-
-				return { ...prevValue, [id]: paths };
-			},
-			{} as {
-				[id: string]:
-					| google.maps.MVCArray<google.maps.LatLng>
-					| google.maps.LatLng[]
-					| google.maps.LatLngLiteral[];
-			}
-		);
-
-		setPathMap(newPathMap);
-
-		let interval = setInterval(() => {
-			setIconsOffset((prev) => {
-				if (prev === 100) {
-					clearInterval(interval);
-					return 0;
-				}
-
-				return prev + 0.005;
-			});
-		}, 20);
-
-		return () => {
-			clearInterval(interval);
-		};
-	}, [docs]);
+	const handleSimulationSpeedChange = (
+		_: React.MouseEvent<HTMLElement>,
+		newSimulationSpeed: number
+	) => {
+		setSimulationSpeed(newSimulationSpeed);
+	};
 
 	return (
 		<Layout title='Vehicle Tracking'>
+			<Box sx={{ marginBottom: "15px", display: "flex", justifyContent: "flex-end" }}>
+				<ToggleButtonGroup
+					size='small'
+					value={simulationSpeed}
+					exclusive
+					onChange={handleSimulationSpeedChange}
+				>
+					{simulationSpeeds.map(({ value, label }) => (
+						<ToggleButton key={value} value={value}>
+							{label}
+						</ToggleButton>
+					))}
+				</ToggleButtonGroup>
+			</Box>
+
 			<GoogleMap
 				id='route-optimization-map'
 				mapContainerStyle={containerStyle}
 				center={center}
 				zoom={13}
 			>
-				{Object.entries(pathMap).map(([id, path]) => {
-					return (
-						<Polyline
-							key={id}
-							path={path}
-							options={{
-								icons: [
-									{
-										icon,
-										offset: `${iconOffset}%`,
-									},
-								],
-								strokeColor: "#00000000",
-							}}
-						/>
-					);
-				})}
+				{vehicles.map((vehicle) => (
+					<VehicleComponent
+						key={vehicle.id}
+						vehicle={vehicle}
+						id={vehicle.id}
+						simulationSpeed={simulationSpeed}
+					/>
+				))}
 			</GoogleMap>
 		</Layout>
 	);
