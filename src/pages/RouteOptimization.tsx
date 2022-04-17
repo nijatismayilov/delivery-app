@@ -8,11 +8,11 @@ import {
 } from "@react-google-maps/api";
 import { decode } from "@googlemaps/polyline-codec";
 import { db } from "firebase-config";
-// import { useDocument } from "react-firebase-hooks/firestore";
 import { collection, addDoc, updateDoc, DocumentReference, DocumentData } from "firebase/firestore";
 import { Box, Button, Modal, TextField, Typography, CircularProgress } from "@mui/material";
 import { HiPlusSm } from "react-icons/hi";
 import toast from "react-hot-toast";
+import { ParcelStatus } from "./PackageTracking";
 
 const containerStyle = {
 	width: "100%",
@@ -83,14 +83,17 @@ const getPathsFromDirectionResult = (result: google.maps.DirectionsResult) => {
 };
 
 export type Parcel = {
+	id: string;
 	origin: string;
 	destination: string;
 	description: string;
-	path?: google.maps.LatLng[];
-	status?: string;
+	paths?: google.maps.LatLng[];
+	status?: ParcelStatus;
 };
 
-const addParcelToFirebase = async (parcel: Parcel) => {
+export type ParcelDto = Omit<Parcel, "id">;
+
+const addParcelToFirebase = async (parcel: ParcelDto) => {
 	try {
 		const ref = await addDoc(parcelsCollectionRef, parcel);
 		toast.success(`Parcel Added - ${ref.id}`);
@@ -181,7 +184,7 @@ const RouteOptimization: React.FC = () => {
 			return;
 		}
 
-		const parcel: Parcel = {
+		const parcel: ParcelDto = {
 			origin: parcelOrigin,
 			destination: parcelDestination,
 			description: parcelDescription,
