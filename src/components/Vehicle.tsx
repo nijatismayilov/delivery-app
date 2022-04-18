@@ -53,7 +53,7 @@ const VehicleComponent: React.FC<Props> = (props) => {
 	const [progress, setProgress] = useState(vehicle.deliveryProgress * 100);
 
 	useEffect(() => {
-		let interval = setInterval(async () => {
+		let interval = setInterval(() => {
 			setProgress((prevProgress) => {
 				if (prevProgress >= 100) {
 					clearInterval(interval);
