@@ -1,9 +1,7 @@
 import { Polyline } from "@react-google-maps/api";
 import { Vehicle } from "pages/VehicleTracking";
 import { useState, useEffect } from "react";
-import { db } from "firebase-config";
-import { updateDoc, doc, getDoc, DocumentReference } from "firebase/firestore";
-import { Parcel } from "pages/RouteOptimization";
+import { useSpring } from "framer-motion";
 
 const icon = {
 	path: 1,
@@ -13,71 +11,30 @@ const icon = {
 	rotation: 0,
 };
 
-const updateVehicleProgress = async (id: string, progress: number) => {
-	const vehicleRef = doc(db, "vehicles", id);
-
-	await updateDoc(vehicleRef, { deliveryProgress: progress });
-};
-
-const setVehicleIdle = async (id: string) => {
-	const vehicleRef = doc(db, "vehicles", id) as DocumentReference<Vehicle>;
-	const vehicleSnapshot = await getDoc(vehicleRef);
-	const vehicle = vehicleSnapshot.data() as Vehicle | undefined;
-
-	if (vehicle) {
-		const parcelRefs = vehicle.parcels.map((parcelId) =>
-			doc(db, "parcels", parcelId)
-		) as DocumentReference<Parcel>[];
-
-		await Promise.all(
-			parcelRefs.map((parcelRef) => updateDoc<Parcel>(parcelRef, { status: "Delivered" }))
-		);
-	}
-
-	await updateDoc<Vehicle>(vehicleRef, {
-		status: "idle",
-		deliveryProgress: 0,
-		parcels: [],
-		paths: [],
-	});
-};
-
 interface Props {
 	vehicle: Vehicle;
-	id: string;
-	simulationSpeed: number;
 }
 
 const VehicleComponent: React.FC<Props> = (props) => {
-	const { vehicle, id, simulationSpeed } = props;
+	const { vehicle } = props;
 	const [progress, setProgress] = useState(vehicle.deliveryProgress * 100);
+	const progressSpring = useSpring(vehicle.deliveryProgress, {
+		mass: 8.5,
+		damping: 120,
+		stiffness: 53,
+	});
 
 	useEffect(() => {
-		let interval = setInterval(() => {
-			setProgress((prevProgress) => {
-				if (prevProgress >= 100) {
-					clearInterval(interval);
-				}
+		progressSpring.set(vehicle.deliveryProgress);
+	}, [progressSpring, vehicle.deliveryProgress]);
 
-				return prevProgress + 0.1 * simulationSpeed;
-			});
-		}, 1000);
-
-		return () => {
-			clearInterval(interval);
-		};
-	}, [simulationSpeed]);
-
-	useEffect(() => {
-		(async () => {
-			if (progress >= 100) {
-				await setVehicleIdle(id);
-				return;
-			}
-
-			await updateVehicleProgress(id, progress / 100);
-		})();
-	}, [progress, id]);
+	useEffect(
+		() =>
+			progressSpring.onChange((latest) => {
+				setProgress(latest * 100);
+			}),
+		[progressSpring]
+	);
 
 	return (
 		<>
@@ -90,7 +47,7 @@ const VehicleComponent: React.FC<Props> = (props) => {
 							offset: `${progress}%`,
 						},
 					],
-					strokeColor: "#000000",
+					strokeColor: "#3B75C690",
 				}}
 			/>
 		</>

@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { routes } from "app/routes";
-import { useJsApiLoader, useLoadScript } from "@react-google-maps/api";
+import { useLoadScript } from "@react-google-maps/api";
 import { Toaster } from "react-hot-toast";
 
 type Library = "places" | "drawing" | "geometry" | "localContext" | "visualization";
@@ -8,11 +8,6 @@ type Library = "places" | "drawing" | "geometry" | "localContext" | "visualizati
 const libraries: Library[] = ["places"];
 
 const App: React.FC = () => {
-	// const { isLoaded } = useJsApiLoader({
-	// 	id: "route-optimization-map",
-	// 	googleMapsApiKey: "AIzaSyB3mwDlUpE2G4pMlnPIeJHv4R7kAqmHKsM",
-	// 	libraries,
-	// });
 	const { isLoaded } = useLoadScript({
 		id: "route-optimization-map",
 		googleMapsApiKey: "AIzaSyB3mwDlUpE2G4pMlnPIeJHv4R7kAqmHKsM",

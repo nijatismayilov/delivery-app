@@ -91,12 +91,7 @@ const VehicleTracking: React.FC = () => {
 				zoom={13}
 			>
 				{vehicles.map((vehicle) => (
-					<VehicleComponent
-						key={vehicle.id}
-						vehicle={vehicle}
-						id={vehicle.id}
-						simulationSpeed={simulationSpeed}
-					/>
+					<VehicleComponent key={vehicle.id} vehicle={vehicle} />
 				))}
 			</GoogleMap>
 		</Layout>
