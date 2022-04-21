@@ -1,12 +1,11 @@
 import Layout from "components/Layout";
 import { GoogleMap } from "@react-google-maps/api";
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { db } from "firebase-config";
 import { useCollection } from "react-firebase-hooks/firestore";
-import { collection, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
+import { collection, DocumentData, QueryDocumentSnapshot, query, where } from "firebase/firestore";
 import { decodeParcelPaths } from "./RouteOptimization";
 import VehicleComponent from "components/Vehicle";
-import { ToggleButtonGroup, ToggleButton, Box } from "@mui/material";
 
 export type VehicleStatus = "idle" | "delivery";
 
@@ -33,6 +32,7 @@ const center = {
 };
 
 const vehiclesCollectionRef = collection(db, "vehicles");
+const getDeliveryVehicles = query(vehiclesCollectionRef, where("status", "==", "delivery"));
 
 const convertDocToVehicle = (doc: QueryDocumentSnapshot<DocumentData>): Vehicle => {
 	const paths = decodeParcelPaths(doc.data()!.paths as string[]);
@@ -44,46 +44,17 @@ const convertDocToVehicle = (doc: QueryDocumentSnapshot<DocumentData>): Vehicle 
 	} as Vehicle;
 };
 
-const simulationSpeeds = [
-	{ label: "Real Time", value: 1 },
-	{ label: "5x", value: 5 },
-	{ label: "10x", value: 10 },
-];
-
 const VehicleTracking: React.FC = () => {
-	const [simulationSpeed, setSimulationSpeed] = useState(simulationSpeeds[0].value);
-	const [snapshot] = useCollection(vehiclesCollectionRef);
+	const [snapshot] = useCollection(getDeliveryVehicles);
 
 	const vehicles = useMemo(() => {
 		const docs = snapshot?.docs || [];
 
-		return docs.map(convertDocToVehicle).filter((v) => v.status === "delivery");
+		return docs.map(convertDocToVehicle);
 	}, [snapshot]);
-
-	const handleSimulationSpeedChange = (
-		_: React.MouseEvent<HTMLElement>,
-		newSimulationSpeed: number
-	) => {
-		setSimulationSpeed(newSimulationSpeed);
-	};
 
 	return (
 		<Layout title='Vehicle Tracking'>
-			<Box sx={{ marginBottom: "15px", display: "flex", justifyContent: "flex-end" }}>
-				<ToggleButtonGroup
-					size='small'
-					value={simulationSpeed}
-					exclusive
-					onChange={handleSimulationSpeedChange}
-				>
-					{simulationSpeeds.map(({ value, label }) => (
-						<ToggleButton key={value} value={value}>
-							{label}
-						</ToggleButton>
-					))}
-				</ToggleButtonGroup>
-			</Box>
-
 			<GoogleMap
 				id='route-optimization-map'
 				mapContainerStyle={containerStyle}

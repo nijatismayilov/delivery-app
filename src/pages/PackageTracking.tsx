@@ -9,11 +9,11 @@ import {
 	QueryDocumentSnapshot,
 	DocumentData,
 } from "firebase/firestore";
-import { useCallback, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { DataGrid, GridColDef, GridSelectionModel, GridValueGetterParams } from "@mui/x-data-grid";
 import { Parcel, decodeParcelPaths } from "./RouteOptimization";
 import { HiCheck } from "react-icons/hi";
-import { Box, Button, Chip, Typography } from "@mui/material";
+import { Box, Chip, Typography } from "@mui/material";
 import { BsDash } from "react-icons/bs";
 import InventoryParcelsTable from "components/InventoryParcelsTable";
 
@@ -118,11 +118,6 @@ export const convertDocToParcel = (doc: QueryDocumentSnapshot<DocumentData>): Pa
 };
 
 const PackageTracking: React.FC = () => {
-	const [inDeliveryParcelsSelectionModel, setInDeliveryParcelsSelectionModel] =
-		useState<GridSelectionModel>([]);
-	const [deliveredParcelsSelectionModel, setDeliveredParcelsSelectionModel] =
-		useState<GridSelectionModel>([]);
-
 	const [parcelsSnapshot, loading] = useCollection(parcelsCollectionRef);
 
 	const rows = useMemo(() => {
@@ -139,28 +134,6 @@ const PackageTracking: React.FC = () => {
 		return rows.filter((row) => row.status === "Delivered");
 	}, [rows]);
 
-	const handleInDeliveryParcelsSelectionModelChange = useCallback(
-		(selectionModel: GridSelectionModel) => {
-			setInDeliveryParcelsSelectionModel(selectionModel);
-		},
-		[]
-	);
-
-	const handleDeliveredParcelsSelectionModelChange = useCallback(
-		(selectionModel: GridSelectionModel) => {
-			setDeliveredParcelsSelectionModel(selectionModel);
-		},
-		[]
-	);
-
-	const handleMarkDelivered = async () => {
-		await changeParcelsStatus(inDeliveryParcelsSelectionModel, "Delivered");
-	};
-
-	const handleSendToInventory = async () => {
-		await changeParcelsStatus(deliveredParcelsSelectionModel, "Inventory");
-	};
-
 	return (
 		<Layout title='Package Tracking'>
 			<InventoryParcelsTable columns={columns} />
@@ -170,10 +143,6 @@ const PackageTracking: React.FC = () => {
 					<Typography variant='h6' color={(theme) => theme.palette.primary.dark}>
 						In Delivery Parcels
 					</Typography>
-
-					<Button variant='contained' onClick={handleMarkDelivered}>
-						Mark as delivered
-					</Button>
 				</Box>
 
 				<Box sx={{ height: "400px" }}>
@@ -182,9 +151,8 @@ const PackageTracking: React.FC = () => {
 						columns={columns}
 						pageSize={5}
 						rowsPerPageOptions={[5]}
-						checkboxSelection
 						loading={loading}
-						onSelectionModelChange={handleInDeliveryParcelsSelectionModelChange}
+						disableSelectionOnClick
 					/>
 				</Box>
 			</Box>
@@ -194,10 +162,6 @@ const PackageTracking: React.FC = () => {
 					<Typography variant='h6' color={(theme) => theme.palette.primary.dark}>
 						Delivered Parcels
 					</Typography>
-
-					<Button variant='contained' onClick={handleSendToInventory}>
-						Send to Inventory
-					</Button>
 				</Box>
 
 				<Box sx={{ height: "400px" }}>
@@ -206,9 +170,8 @@ const PackageTracking: React.FC = () => {
 						columns={columns}
 						pageSize={5}
 						rowsPerPageOptions={[5]}
-						checkboxSelection
 						loading={loading}
-						onSelectionModelChange={handleDeliveredParcelsSelectionModelChange}
+						disableSelectionOnClick
 					/>
 				</Box>
 			</Box>

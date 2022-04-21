@@ -19,7 +19,6 @@ import { changeParcelsStatus, convertDocToParcel } from "pages/PackageTracking";
 
 const parcelsCollectionRef = collection(db, "parcels");
 const vehiclesCollectionRef = collection(db, "vehicles");
-const countsCollectionRef = collection(db, "total-counts");
 
 const getIdleVehiclesQuery = query(vehiclesCollectionRef, where("status", "==", "idle"));
 const getInventoryParcelsQuery = query(parcelsCollectionRef);
@@ -33,7 +32,6 @@ const InventoryParcelsTable: React.FC<Props> = (props) => {
 	const [sendToDeliveryLoading, setSendToDeliveryLoading] = useState(false);
 	const [inventoryParcelsSelectionModel, setInventoryParcelsSelectionModel] =
 		useState<GridSelectionModel>([]);
-	const [countsSnapshot] = useCollection(countsCollectionRef);
 	const [parcelsSnapshot, parcelsLoading] = useCollection(getInventoryParcelsQuery);
 	const [idleVehiclesSnapshot, idleVehiclesLoading] = useCollection(getIdleVehiclesQuery);
 

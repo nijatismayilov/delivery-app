@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { Box, Button, Modal, Typography } from "@mui/material";
 import { DataGrid, GridColDef, GridValueGetterParams } from "@mui/x-data-grid";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { columns as parcelColumns, convertDocToParcel } from "./PackageTracking";
 import { Parcel } from "./RouteOptimization";
 
@@ -78,14 +78,14 @@ const Users: React.FC = () => {
 
 		const docs = parcelsSnapshot?.docs || [];
 
-		console.log(docs.length);
+		const userParcels = user.parcels.reduce((prev, parcelId) => {
+			const parcel = docs.find((doc) => doc.id === parcelId);
 
-		return docs.map(convertDocToParcel).filter((p) => user.parcels.includes(p.id));
+			return parcel ? [...prev, convertDocToParcel(parcel)] : prev;
+		}, [] as Parcel[]);
+
+		return userParcels;
 	}, [parcelsSnapshot, user]);
-
-	useEffect(() => {
-		console.log(parcels);
-	}, [parcels]);
 
 	const handleRowClick = useCallback((user: User) => {
 		setModalOpen(true);
@@ -101,6 +101,7 @@ const Users: React.FC = () => {
 					pageSize={50}
 					loading={usersLoading}
 					disableSelectionOnClick
+					rowsPerPageOptions={[50]}
 				/>
 
 				<Modal
