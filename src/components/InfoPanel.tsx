@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { FcInfo } from "react-icons/fc";
-import { Box, CircularProgress, Typography } from "@mui/material";
+import { Box } from "@mui/material";
 import { IoMdCloseCircle } from "react-icons/io";
 import * as workerTimers from "worker-timers";
+import InfoPanelItem from "./InfoPanelItem";
 
 const { setTimeout, clearTimeout } = workerTimers;
 
@@ -46,11 +47,24 @@ const InfoPanel: React.FC<Props> = (props) => {
 	const [expanded, setExpanded] = useState(false);
 	const [progress, setProgress] = useState(0);
 	const [seconds, setSeconds] = useState(0);
+	const [locationUpdateProgress, setLocationUpdateProgress] = useState(0);
+	const [locationUpdateSeconds, setLocationUpdateSeconds] = useState(0);
 
 	useEffect(() => {
 		const currentSeconds = currentTime();
+
 		setProgress((currentSeconds / 60) * 100);
 		setSeconds(currentSeconds);
+
+		// Location update happens roughly every 60 / 5 = 12 seconds
+		// So every 100% of the progress bar is 12 seconds
+		// So every 1% of the progress bar is 0.012 seconds
+		// We need to first find out how many seconds do we have left
+		const currentLocationUpdateCycle = Math.floor(60 / currentSeconds);
+		const locationUpdateSecondsLeft = Math.abs(currentLocationUpdateCycle * 12 - currentSeconds);
+		const locationUpdateProgress = (locationUpdateSecondsLeft / 12) * 100;
+		setLocationUpdateProgress(locationUpdateProgress);
+		setLocationUpdateSeconds(locationUpdateSecondsLeft);
 
 		const timer = new Timer(() => {
 			setProgress((prev) => {
@@ -61,6 +75,16 @@ const InfoPanel: React.FC<Props> = (props) => {
 
 			setSeconds((prev) => {
 				if (prev >= 60) return 0;
+
+				return prev + 1;
+			});
+
+			setLocationUpdateProgress((prev) => {
+				return prev + (1 / 12) * 100 >= 100 ? 0 : prev + (1 / 12) * 100;
+			});
+
+			setLocationUpdateSeconds((prev) => {
+				if (prev >= 12) return 0;
 
 				return prev + 1;
 			});
@@ -101,40 +125,19 @@ const InfoPanel: React.FC<Props> = (props) => {
 			</Box>
 
 			<>
-				<Box
-					sx={{ marginBottom: 2, display: "flex", flexDirection: "column", alignItems: "center" }}
-				>
-					<Typography sx={{ marginBottom: 1, color: "#26a7ed" }} variant='h6' align='center'>
-						Next Vehicle Schedule
-					</Typography>
+				<InfoPanelItem
+					title='Next Vehicle Schedule'
+					color='#26a7ed'
+					progress={progress}
+					seconds={seconds}
+				/>
 
-					<Box sx={{ position: "relative", height: "60px" }}>
-						<CircularProgress
-							sx={{
-								circle: {
-									stroke: "#26a7ed",
-								},
-							}}
-							variant='determinate'
-							value={progress}
-							size={60}
-						/>
-
-						<Box
-							sx={{
-								position: "absolute",
-								top: "50%",
-								left: "50%",
-								transform: "translate(-50%, -50%)",
-								fontSize: "1.5rem",
-								lineHeight: 1,
-								color: "#26a7ed",
-							}}
-						>
-							{seconds}
-						</Box>
-					</Box>
-				</Box>
+				<InfoPanelItem
+					title='Next Vehicle Location Updates'
+					color='#26a7a0'
+					progress={locationUpdateProgress}
+					seconds={locationUpdateSeconds}
+				/>
 			</>
 		</motion.div>
 	);
