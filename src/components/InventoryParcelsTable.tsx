@@ -40,7 +40,9 @@ const InventoryParcelsTable: React.FC<Props> = (props) => {
 			return [];
 		}
 
-		return parcelsSnapshot.docs.map(convertDocToParcel);
+		return parcelsSnapshot.docs
+			.map(convertDocToParcel)
+			.filter((parcel) => parcel.status === "Inventory");
 	}, [parcelsLoading, parcelsSnapshot]);
 
 	const idleVehiclesDocs = useMemo(() => {

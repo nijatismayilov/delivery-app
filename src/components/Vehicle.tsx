@@ -13,10 +13,11 @@ const icon = {
 
 interface Props {
 	vehicle: Vehicle;
+	isPathOnly?: boolean;
 }
 
 const VehicleComponent: React.FC<Props> = (props) => {
-	const { vehicle } = props;
+	const { vehicle, isPathOnly = false } = props;
 	const [progress, setProgress] = useState(vehicle.deliveryProgress * 100);
 	const progressSpring = useSpring(vehicle.deliveryProgress, {
 		mass: 8.5,
@@ -25,15 +26,15 @@ const VehicleComponent: React.FC<Props> = (props) => {
 	});
 
 	useEffect(() => {
-		progressSpring.set(vehicle.deliveryProgress);
-	}, [progressSpring, vehicle.deliveryProgress]);
+		!isPathOnly && progressSpring.set(vehicle.deliveryProgress);
+	}, [isPathOnly, progressSpring, vehicle.deliveryProgress]);
 
 	useEffect(
 		() =>
 			progressSpring.onChange((latest) => {
 				setProgress(latest * 100);
 			}),
-		[progressSpring]
+		[isPathOnly, progressSpring]
 	);
 
 	return (
@@ -41,12 +42,14 @@ const VehicleComponent: React.FC<Props> = (props) => {
 			<Polyline
 				path={vehicle.paths}
 				options={{
-					icons: [
-						{
-							icon,
-							offset: `${progress}%`,
-						},
-					],
+					icons: isPathOnly
+						? undefined
+						: [
+								{
+									icon,
+									offset: `${progress}%`,
+								},
+						  ],
 					strokeColor: "#3B75C690",
 				}}
 			/>
