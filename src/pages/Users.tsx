@@ -54,7 +54,7 @@ const columns: Columns = (clickHandler) => [
 	},
 ];
 
-const convertDocToUser = (doc: QueryDocumentSnapshot<DocumentData>): User => {
+export const convertDocToUser = (doc: QueryDocumentSnapshot<DocumentData>): User => {
 	return {
 		id: doc.id,
 		...doc.data(),

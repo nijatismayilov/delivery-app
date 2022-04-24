@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from "react";
+import { useState, useCallback, memo, useMemo, useRef } from "react";
 import Layout from "components/Layout";
 import {
 	GoogleMap,
@@ -9,10 +9,22 @@ import {
 import { decode } from "@googlemaps/polyline-codec";
 import { db } from "firebase-config";
 import { collection, addDoc, updateDoc, DocumentReference, DocumentData } from "firebase/firestore";
-import { Box, Button, Modal, TextField, Typography, CircularProgress } from "@mui/material";
+import { useCollection } from "react-firebase-hooks/firestore";
+import {
+	Box,
+	Button,
+	Modal,
+	TextField,
+	Typography,
+	CircularProgress,
+	Select,
+	MenuItem,
+	SelectChangeEvent,
+} from "@mui/material";
 import { HiPlusSm } from "react-icons/hi";
 import toast from "react-hot-toast";
 import { ParcelStatus } from "./PackageTracking";
+import { convertDocToUser } from "./Users";
 
 const containerStyle = {
 	width: "100%",
@@ -27,6 +39,7 @@ const center = {
 const MemoizedDirectionsService = memo(DirectionsService);
 
 const parcelsCollectionRef = collection(db, "parcels");
+const usersCollectionRef = collection(db, "users");
 
 export const getPathsFromDirectionResult = (result: google.maps.DirectionsResult) => {
 	const { routes } = result;
@@ -77,6 +90,7 @@ export type Parcel = {
 	description: string;
 	paths?: google.maps.LatLng[];
 	status?: ParcelStatus;
+	userId: string;
 };
 
 export type ParcelDto = Omit<Parcel, "id">;
@@ -103,6 +117,14 @@ const RouteOptimization: React.FC = () => {
 	const [parcelDescription, setParcelDescription] = useState<string>();
 	const [directionOptions, setDirectionsOptions] = useState<google.maps.DirectionsRequest>();
 	const [parcelRef, setParcelRef] = useState<DocumentReference<DocumentData>>();
+	const [user, setUser] = useState<string>();
+	const [usersSnapshot, usersLoading] = useCollection(usersCollectionRef);
+
+	const users = useMemo(() => {
+		if (!usersSnapshot) return [];
+
+		return usersSnapshot.docs.map(convertDocToUser);
+	}, [usersSnapshot]);
 
 	const handleDirectionsServiceCallback = useCallback(
 		async (result: google.maps.DirectionsResult | null, status: google.maps.DirectionsStatus) => {
@@ -167,37 +189,55 @@ const RouteOptimization: React.FC = () => {
 	}, [destinationAutocomplete]);
 
 	const handleAddParcel = async () => {
-		if (!parcelOrigin || !parcelDestination || !parcelDescription) {
-			toast.error("Required fields must be filled");
-			return;
-		}
-
-		const parcel: ParcelDto = {
-			origin: parcelOrigin,
-			destination: parcelDestination,
-			description: parcelDescription,
-			status: "Inventory",
-		};
-
 		setAddParcelLoading(true);
 
-		const ref = await addParcelToFirebase(parcel);
+		try {
+			if (!parcelOrigin || !parcelDestination || !parcelDescription || !user) {
+				toast.error("Required fields must be filled");
+				return;
+			}
 
-		setAddParcelLoading(false);
+			const parcel: ParcelDto = {
+				origin: parcelOrigin,
+				destination: parcelDestination,
+				description: parcelDescription,
+				status: "Inventory",
+				userId: user,
+			};
 
-		if (!ref) {
+			const ref = await addParcelToFirebase(parcel);
+
+			if (!ref) {
+				toast.error("Something went wrong, please try again");
+
+				return;
+			}
+
+			const userSnapshot = usersSnapshot?.docs.find((user) => user.id === parcel.userId);
+
+			if (!userSnapshot) return;
+
+			const userRef = userSnapshot.ref;
+
+			await updateDoc(userRef, { parcels: [...userSnapshot.data().parcels, ref.id] });
+			toast.success("Parcel Added");
+			setParcelOrigin("");
+			setParcelDestination("");
+			setParcelDescription("");
+			setModalOpen(false);
+
+			setParcelRef(ref);
+			setParcelOrigin(undefined);
+			setParcelDestination(undefined);
+			setParcelDescription(undefined);
+			setModalOpen(false);
+
+			await handleGetOptimalRoute({ origin: parcel.origin, destination: parcel.destination });
+		} catch (error) {
 			toast.error("Something went wrong, please try again");
-
-			return;
+		} finally {
+			setAddParcelLoading(false);
 		}
-
-		setParcelRef(ref);
-		setParcelOrigin(undefined);
-		setParcelDestination(undefined);
-		setParcelDescription(undefined);
-		setModalOpen(false);
-
-		await handleGetOptimalRoute({ origin: parcel.origin, destination: parcel.destination });
 	};
 
 	const handleGetOptimalRoute = async (args: { origin: string; destination: string }) => {
@@ -213,6 +253,10 @@ const RouteOptimization: React.FC = () => {
 				travelMode: "DRIVING" as google.maps.TravelMode.DRIVING,
 			});
 		}, 10000);
+	};
+
+	const handleChange = (event: SelectChangeEvent) => {
+		setUser(event.target.value as string);
 	};
 
 	return (
@@ -280,6 +324,17 @@ const RouteOptimization: React.FC = () => {
 						value={parcelDescription}
 						onChange={(e) => setParcelDescription(e.target.value)}
 					/>
+
+					<Select value={user} onChange={handleChange} fullWidth sx={{ marginBottom: 5 }}>
+						<MenuItem disabled value=''>
+							User
+						</MenuItem>
+						{users.map((user) => (
+							<MenuItem key={user.id} value={user.id}>
+								{user.firstName} {user.lastName}
+							</MenuItem>
+						))}
+					</Select>
 
 					<Box sx={{ display: "flex", justifyContent: "flex-end" }}>
 						<Button disabled={addParcelLoading} variant='contained' onClick={handleAddParcel}>
