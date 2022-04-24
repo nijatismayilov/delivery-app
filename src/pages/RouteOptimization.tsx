@@ -118,7 +118,7 @@ const RouteOptimization: React.FC = () => {
 	const [directionOptions, setDirectionsOptions] = useState<google.maps.DirectionsRequest>();
 	const [parcelRef, setParcelRef] = useState<DocumentReference<DocumentData>>();
 	const [user, setUser] = useState<string>();
-	const [usersSnapshot, usersLoading] = useCollection(usersCollectionRef);
+	const [usersSnapshot] = useCollection(usersCollectionRef);
 
 	const users = useMemo(() => {
 		if (!usersSnapshot) return [];
