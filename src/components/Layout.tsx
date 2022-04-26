@@ -1,6 +1,6 @@
 import { Box } from "@mui/material";
 import Sidebar from "components/Sidebar";
-import InfoPanel from "components/InfoPanel";
+// import InfoPanel from "components/InfoPanel";
 
 interface Props {
 	title?: string | React.ReactNode;
@@ -23,7 +23,7 @@ const Layout: React.FC<Props> = (props) => {
 				)}
 				<Box className='p-5'>{children}</Box>
 
-				<InfoPanel />
+				{/* <InfoPanel /> */}
 			</Box>
 		</Box>
 	);

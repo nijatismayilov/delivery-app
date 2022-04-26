@@ -1,4 +1,4 @@
-import { useState, useCallback, memo, useMemo, useRef } from "react";
+import { useState, useCallback, memo, useMemo } from "react";
 import Layout from "components/Layout";
 import {
 	GoogleMap,
@@ -246,13 +246,16 @@ const RouteOptimization: React.FC = () => {
 		setGetOptimalRouteLoading(true);
 		setDirections(undefined);
 
+		// Random timeout seconds between 2 and 7
+		const timeoutSeconds = Math.floor(Math.random() * 6) + 2;
+
 		setTimeout(() => {
 			setDirectionsOptions({
 				origin,
 				destination,
 				travelMode: "DRIVING" as google.maps.TravelMode.DRIVING,
 			});
-		}, 10000);
+		}, timeoutSeconds);
 	};
 
 	const handleChange = (event: SelectChangeEvent) => {
