@@ -57,7 +57,7 @@ const center = {
 const vehiclesCollectionRef = collection(db, "vehicles");
 const parcelsCollectionRef = collection(db, "parcels") as CollectionReference<Parcel>;
 
-const convertDocToVehicle = (doc: QueryDocumentSnapshot<DocumentData>): Vehicle => {
+export const convertDocToVehicle = (doc: QueryDocumentSnapshot<DocumentData>): Vehicle => {
 	const paths = decodeParcelPaths(doc.data()!.paths as string[]);
 
 	return {
